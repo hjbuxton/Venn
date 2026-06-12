@@ -5,14 +5,13 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/Button";
 import { Input, Label } from "@/components/ui/Input";
-import { DateRangePicker } from "@/components/ui/DateRangePicker";
 import { generateInviteCode } from "@/lib/utils";
-import type { DateRange } from "@/types/database";
 
 export function NewTripForm() {
   const router = useRouter();
   const [name, setName] = useState("");
-  const [travelWindow, setTravelWindow] = useState<DateRange | null>(null);
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
   const [groupSize, setGroupSize] = useState(4);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -21,10 +20,16 @@ export function NewTripForm() {
     e.preventDefault();
     setError(null);
 
-    if (!travelWindow) {
-      setError("Please select a travel window.");
+    if (!startDate || !endDate) {
+      setError("Please select a start and end date.");
       return;
     }
+    if (endDate < startDate) {
+      setError("End date must be on or after the start date.");
+      return;
+    }
+
+    const travelWindow = { from: startDate, to: endDate };
 
     setLoading(true);
     const supabase = createClient();
@@ -98,12 +103,33 @@ export function NewTripForm() {
       </div>
 
       <div>
-        <Label>Travel window</Label>
-        <DateRangePicker
-          value={travelWindow}
-          onChange={setTravelWindow}
-          placeholder="Roughly when could this happen?"
-        />
+        <p className="block text-sm font-semibold text-ink mb-2">Travel window</p>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <Label htmlFor="start_date" className="text-xs font-medium text-ink-3">
+              Start date
+            </Label>
+            <Input
+              id="start_date"
+              type="date"
+              required
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+            />
+          </div>
+          <div>
+            <Label htmlFor="end_date" className="text-xs font-medium text-ink-3">
+              End date
+            </Label>
+            <Input
+              id="end_date"
+              type="date"
+              required
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+            />
+          </div>
+        </div>
         <p className="mt-2 text-xs text-ink-3">
           This is just a rough window — everyone&apos;s exact availability is collected
           privately afterwards.
