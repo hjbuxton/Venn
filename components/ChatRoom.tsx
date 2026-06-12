@@ -5,7 +5,18 @@ import { ExternalLink, Send, Sparkles } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/utils";
-import type { Message, VennRecommendationItem } from "@/types/database";
+import type { Message, VennRecommendation, VennRecommendationItem } from "@/types/database";
+
+interface RealtimeMessageRow {
+  id: string;
+  trip_id: string;
+  user_id: string | null;
+  content: string;
+  message_type: Message["message_type"];
+  created_at: string;
+  users: { name: string } | null;
+  venn_recommendations: Pick<VennRecommendation, "id" | "recommendations_json"> | null;
+}
 
 const VENN_TRIGGERS = [
   "venn, give us ideas",
@@ -37,68 +48,89 @@ export function ChatRoom({
 
   useEffect(() => {
     const supabase = createClient();
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    let cancelled = false;
 
-    const channel = supabase
-      .channel(`trip-${tripId}-messages`)
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "messages",
-          filter: `trip_id=eq.${tripId}`,
-        },
-        async (payload) => {
-          const newRow = payload.new as { id: string; message_type: string };
+    async function setup() {
+      // Postgres Changes are RLS-checked using the realtime socket's auth
+      // token, which is only attached to the join payload if it's set
+      // *before* subscribe() is called. Without this, the socket connects
+      // as `anon`, `is_trip_member()` returns false, and no events ever
+      // arrive (the chat then only updates on full page reloads).
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
 
-          const { data } = await supabase
-            .from("messages")
-            .select(
-              "id, trip_id, user_id, content, message_type, recommendation_id, created_at, users(name), venn_recommendations(id, recommendations_json)"
-            )
-            .eq("id", newRow.id)
-            .single();
+      if (session?.access_token) {
+        await supabase.realtime.setAuth(session.access_token);
+      }
 
-          if (!data) return;
+      if (cancelled) return;
 
-          const userRow = data.users?.[0];
-          const recRow = data.venn_recommendations?.[0];
+      channel = supabase
+        .channel(`trip-${tripId}-messages`)
+        .on(
+          "postgres_changes",
+          {
+            event: "INSERT",
+            schema: "public",
+            table: "messages",
+            filter: `trip_id=eq.${tripId}`,
+          },
+          async (payload) => {
+            const newRow = payload.new as { id: string };
 
-          const message: Message = {
-            id: data.id,
-            trip_id: data.trip_id,
-            user_id: data.user_id,
-            content: data.content,
-            message_type: data.message_type,
-            created_at: data.created_at,
-            user: userRow
-              ? { id: data.user_id ?? "", email: "", name: userRow.name, created_at: "" }
-              : undefined,
-            recommendation: recRow
-              ? {
-                  id: recRow.id,
-                  trip_id: data.trip_id,
-                  triggered_by: "",
-                  recommendations_json: recRow.recommendations_json,
-                  created_at: data.created_at,
-                }
-              : undefined,
-          };
+            const { data } = await supabase
+              .from("messages")
+              .select(
+                "id, trip_id, user_id, content, message_type, recommendation_id, created_at, users(name), venn_recommendations(id, recommendations_json)"
+              )
+              .eq("id", newRow.id)
+              .single();
 
-          setMessages((prev) => {
-            if (prev.some((m) => m.id === message.id)) return prev;
-            return [...prev, message];
-          });
+            if (!data) return;
 
-          if (message.message_type === "venn_card") {
-            setAskingVenn(false);
+            const row = data as unknown as RealtimeMessageRow;
+
+            const message: Message = {
+              id: row.id,
+              trip_id: row.trip_id,
+              user_id: row.user_id,
+              content: row.content,
+              message_type: row.message_type,
+              created_at: row.created_at,
+              user: row.users
+                ? { id: row.user_id ?? "", email: "", name: row.users.name, created_at: "" }
+                : undefined,
+              recommendation: row.venn_recommendations
+                ? {
+                    id: row.venn_recommendations.id,
+                    trip_id: row.trip_id,
+                    triggered_by: "",
+                    recommendations_json: row.venn_recommendations.recommendations_json,
+                    created_at: row.created_at,
+                  }
+                : undefined,
+            };
+
+            setMessages((prev) => {
+              if (prev.some((m) => m.id === message.id)) return prev;
+              return [...prev, message];
+            });
+
+            if (message.message_type === "venn_card") {
+              setAskingVenn(false);
+            }
           }
-        }
-      )
-      .subscribe();
+        )
+        .subscribe();
+    }
+
+    void setup();
 
     return () => {
-      supabase.removeChannel(channel);
+      cancelled = true;
+      if (channel) supabase.removeChannel(channel);
     };
   }, [tripId]);
 
@@ -110,19 +142,40 @@ export function ChatRoom({
     setError(null);
 
     const supabase = createClient();
-    const { error: insertError } = await supabase.from("messages").insert({
-      trip_id: tripId,
-      user_id: currentUserId,
-      content: trimmed,
-      message_type: "text",
-    });
+    const { data, error: insertError } = await supabase
+      .from("messages")
+      .insert({
+        trip_id: tripId,
+        user_id: currentUserId,
+        content: trimmed,
+        message_type: "text",
+      })
+      .select("id, created_at")
+      .single();
 
     setSending(false);
 
-    if (insertError) {
-      setError(insertError.message);
+    if (insertError || !data) {
+      setError(insertError?.message ?? "Failed to send message.");
       return;
     }
+
+    // Show the message immediately rather than waiting on the realtime
+    // round-trip; the later postgres_changes event for this id is deduped.
+    setMessages((prev) => {
+      if (prev.some((m) => m.id === data.id)) return prev;
+      return [
+        ...prev,
+        {
+          id: data.id,
+          trip_id: tripId,
+          user_id: currentUserId,
+          content: trimmed,
+          message_type: "text",
+          created_at: data.created_at,
+        },
+      ];
+    });
 
     if (VENN_TRIGGERS.includes(trimmed.toLowerCase())) {
       void askVenn();

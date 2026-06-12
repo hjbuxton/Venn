@@ -103,7 +103,7 @@ export function PreferenceForm({
   return (
     <form onSubmit={handleSubmit} className="space-y-7">
       <div>
-        <Label>Budget per person</Label>
+        <Label>My budget</Label>
         <Select value={budgetRange} onChange={(e) => setBudgetRange(e.target.value as BudgetRange)}>
           {(Object.keys(BUDGET_LABELS) as BudgetRange[]).map((value) => (
             <option key={value} value={value}>
