@@ -68,6 +68,8 @@ export interface VennRecommendationItem {
   destination: string;
   country?: string;
   dates: string;
+  checkin: string; // ISO date string (yyyy-mm-dd)
+  checkout: string; // ISO date string (yyyy-mm-dd)
   accommodation: string;
   description?: string;
   price_per_person: string;

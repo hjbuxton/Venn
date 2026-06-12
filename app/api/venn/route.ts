@@ -94,6 +94,8 @@ Return ONLY a JSON array (no markdown, no commentary) of exactly 5 objects, each
   "destination": "City name",
   "country": "Country name",
   "dates": "A specific date range that fits within the group's overlapping availability, e.g. '12-16 Sep 2026'",
+  "checkin": "Check-in date for the dates above, in strict YYYY-MM-DD format, e.g. '2026-09-12'",
+  "checkout": "Check-out date for the dates above, in strict YYYY-MM-DD format, e.g. '2026-09-16'",
   "accommodation": "Short description of a specific type of place to stay, e.g. 'Beachfront 6-bed apartment'",
   "description": "1-2 sentence description of why this trip is great for the group",
   "price_per_person": "Estimated price per person, e.g. '£450'",
@@ -127,6 +129,8 @@ Return ONLY the JSON array.`;
       ...item,
       booking_url: buildBookingUrl({
         destination: [item.destination, item.country].filter(Boolean).join(", "),
+        checkin: item.checkin,
+        checkout: item.checkout,
       }),
     }));
   } catch (err) {
