@@ -12,7 +12,7 @@ export function NewTripForm() {
   const [name, setName] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
-  const [groupSize, setGroupSize] = useState(4);
+  const [groupSize, setGroupSize] = useState("4");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -26,6 +26,12 @@ export function NewTripForm() {
     }
     if (endDate < startDate) {
       setError("End date must be on or after the start date.");
+      return;
+    }
+
+    const groupSizeValue = Number(groupSize);
+    if (!Number.isInteger(groupSizeValue) || groupSizeValue < 2 || groupSizeValue > 20) {
+      setError("Please enter a group size between 2 and 20.");
       return;
     }
 
@@ -53,7 +59,7 @@ export function NewTripForm() {
           name,
           organiser_id: user.id,
           travel_window: travelWindow,
-          group_size: groupSize,
+          group_size: groupSizeValue,
           invite_code: generateInviteCode(),
         })
         .select()
@@ -141,11 +147,12 @@ export function NewTripForm() {
         <Input
           id="group_size"
           type="number"
+          inputMode="numeric"
           min={2}
           max={20}
           required
           value={groupSize}
-          onChange={(e) => setGroupSize(Number(e.target.value))}
+          onChange={(e) => setGroupSize(e.target.value)}
         />
       </div>
 
