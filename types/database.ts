@@ -66,22 +66,49 @@ export interface Preferences {
 
 export interface VennRecommendationItem {
   destination: string;
-  country?: string;
+  country: string;
   dates: string;
+  nights: number;
+  accommodation_type: string;
+  price_per_person: string;
+  why_it_fits: string;
   checkin: string; // ISO date string (yyyy-mm-dd)
   checkout: string; // ISO date string (yyyy-mm-dd)
-  accommodation: string;
-  description?: string;
-  price_per_person: string;
-  vibe_match?: string;
   booking_url: string;
 }
+
+export interface VennCostBreakdownItem {
+  label: string;
+  amount: string;
+}
+
+export type VennResponse =
+  | {
+      type: "recommendations";
+      message?: string;
+      trips: VennRecommendationItem[];
+    }
+  | {
+      type: "information";
+      headline: string;
+      bullets: string[];
+    }
+  | {
+      type: "clarification";
+      message: string;
+    }
+  | {
+      type: "calculation";
+      headline?: string;
+      breakdown: VennCostBreakdownItem[];
+      total?: string;
+    };
 
 export interface VennRecommendation {
   id: string;
   trip_id: string;
   triggered_by: string;
-  recommendations_json: VennRecommendationItem[];
+  recommendations_json: VennResponse;
   created_at: string;
 }
 

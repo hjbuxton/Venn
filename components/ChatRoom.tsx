@@ -5,7 +5,12 @@ import { ExternalLink, Send, Sparkles } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/utils";
-import type { Message, VennRecommendation, VennRecommendationItem } from "@/types/database";
+import type {
+  Message,
+  VennRecommendation,
+  VennRecommendationItem,
+  VennResponse,
+} from "@/types/database";
 
 interface RealtimeMessageRow {
   id: string;
@@ -18,11 +23,9 @@ interface RealtimeMessageRow {
   venn_recommendations: Pick<VennRecommendation, "id" | "recommendations_json"> | null;
 }
 
-const VENN_TRIGGERS = [
-  "venn, give us ideas",
-  "venn, find us somewhere",
-  "venn, what works for us",
-];
+const VENN_MENTION = /@venn/i;
+const DEFAULT_VENN_PROMPT =
+  "Suggest some trip ideas for the group based on everyone's preferences.";
 
 export function ChatRoom({
   tripId,
@@ -176,34 +179,36 @@ export function ChatRoom({
         },
       ];
     });
-
-    if (VENN_TRIGGERS.includes(trimmed.toLowerCase())) {
-      void askVenn();
-    }
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!input.trim()) return;
-    const value = input;
+    const trimmed = input.trim();
+    if (!trimmed) return;
     setInput("");
-    await sendMessage(value);
+
+    if (VENN_MENTION.test(trimmed)) {
+      void triggerVenn(trimmed);
+      return;
+    }
+
+    await sendMessage(trimmed);
   }
 
-  async function askVenn() {
+  async function triggerVenn(message: string) {
     setAskingVenn(true);
     setError(null);
 
     const res = await fetch("/api/venn", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ tripId }),
+      body: JSON.stringify({ tripId, message }),
     });
 
     if (!res.ok) {
       setAskingVenn(false);
       const body = await res.json().catch(() => null);
-      setError(body?.error ?? "Venn couldn't find any ideas. Please try again.");
+      setError(body?.error ?? "Venn couldn't process that. Please try again.");
     }
   }
 
@@ -213,7 +218,8 @@ export function ChatRoom({
         <div className="mx-auto max-w-3xl px-6 py-4">
           <h1 className="font-bold text-lg text-ink">{tripName}</h1>
           <p className="text-sm text-ink-3">
-            Everyone&apos;s in. Chat below, or ask Venn to find your group some trip ideas.
+            Everyone&apos;s in. Chat below, or mention @Venn to get trip ideas, answers, or
+            cost breakdowns.
           </p>
         </div>
       </div>
@@ -250,7 +256,7 @@ export function ChatRoom({
               type="button"
               variant="secondary"
               size="sm"
-              onClick={askVenn}
+              onClick={() => triggerVenn(DEFAULT_VENN_PROMPT)}
               disabled={askingVenn}
             >
               <Sparkles className="h-4 w-4" />
@@ -261,7 +267,7 @@ export function ChatRoom({
             <input
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="Message your group..."
+              placeholder="Message your group, or mention @Venn..."
               className="flex-1 rounded-xl border border-line px-4 py-2.5 text-sm focus:border-brand focus:outline-none focus:ring-4 focus:ring-brand-light"
             />
             <Button type="submit" disabled={sending || !input.trim()}>
@@ -276,19 +282,18 @@ export function ChatRoom({
 
 function ChatMessage({ message, isOwn }: { message: Message; isOwn: boolean }) {
   if (message.message_type === "venn_card" && message.recommendation) {
-    return (
-      <div className="space-y-3">
-        <div className="flex items-center gap-2 text-sm font-semibold text-brand">
-          <Sparkles className="h-4 w-4" />
-          Venn found some ideas for your group
-        </div>
-        <div className="grid gap-4 sm:grid-cols-2">
-          {message.recommendation.recommendations_json.map((item, i) => (
-            <RecommendationCard key={i} item={item} />
-          ))}
-        </div>
-      </div>
-    );
+    const response = message.recommendation.recommendations_json;
+
+    switch (response.type) {
+      case "recommendations":
+        return <RecommendationsCard response={response} />;
+      case "information":
+        return <InformationCard response={response} />;
+      case "clarification":
+        return <ClarificationCard response={response} />;
+      case "calculation":
+        return <CalculationCard response={response} />;
+    }
   }
 
   if (message.message_type === "system") {
@@ -314,25 +319,113 @@ function ChatMessage({ message, isOwn }: { message: Message; isOwn: boolean }) {
   );
 }
 
+function VennCardShell({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="rounded-2xl border border-brand/20 bg-brand-light/50 p-5">
+      <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-brand">
+        <Sparkles className="h-4 w-4" />
+        Venn
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function RecommendationsCard({
+  response,
+}: {
+  response: Extract<VennResponse, { type: "recommendations" }>;
+}) {
+  return (
+    <VennCardShell>
+      <p className="mb-3 text-sm text-ink-2">
+        {response.message ?? "Here are some ideas for your group."}
+      </p>
+      <div className="grid gap-4 sm:grid-cols-2">
+        {response.trips.map((item, i) => (
+          <RecommendationCard key={i} item={item} />
+        ))}
+      </div>
+    </VennCardShell>
+  );
+}
+
+function InformationCard({
+  response,
+}: {
+  response: Extract<VennResponse, { type: "information" }>;
+}) {
+  return (
+    <VennCardShell>
+      <h3 className="mb-2 font-bold text-ink">{response.headline}</h3>
+      <ul className="list-disc space-y-1.5 pl-5 text-sm text-ink-2">
+        {response.bullets.map((bullet, i) => (
+          <li key={i}>{bullet}</li>
+        ))}
+      </ul>
+    </VennCardShell>
+  );
+}
+
+function ClarificationCard({
+  response,
+}: {
+  response: Extract<VennResponse, { type: "clarification" }>;
+}) {
+  return (
+    <VennCardShell>
+      <p className="text-sm text-ink-2">{response.message}</p>
+    </VennCardShell>
+  );
+}
+
+function CalculationCard({
+  response,
+}: {
+  response: Extract<VennResponse, { type: "calculation" }>;
+}) {
+  return (
+    <VennCardShell>
+      {response.headline && <h3 className="mb-2 font-bold text-ink">{response.headline}</h3>}
+      <div className="space-y-1.5 text-sm">
+        {response.breakdown.map((row, i) => (
+          <div key={i} className="flex items-center justify-between text-ink-2">
+            <span>{row.label}</span>
+            <span className="font-medium text-ink">{row.amount}</span>
+          </div>
+        ))}
+      </div>
+      {response.total && (
+        <div className="mt-3 flex items-center justify-between border-t border-line pt-2 text-sm font-bold text-ink">
+          <span>Total</span>
+          <span>{response.total}</span>
+        </div>
+      )}
+    </VennCardShell>
+  );
+}
+
 function RecommendationCard({ item }: { item: VennRecommendationItem }) {
   return (
-    <div className="flex flex-col rounded-2xl border border-line bg-white p-5">
+    <div className="flex flex-col rounded-xl border border-line bg-white p-4">
       <h3 className="font-bold text-ink">
         {item.destination}
         {item.country ? `, ${item.country}` : ""}
       </h3>
-      <p className="mt-1 text-sm text-ink-3">{item.dates}</p>
-      {item.description && <p className="mt-2 text-sm text-ink-2">{item.description}</p>}
+      <p className="mt-1 text-sm text-ink-3">
+        {item.dates}
+        {item.nights ? ` · ${item.nights} night${item.nights === 1 ? "" : "s"}` : ""}
+      </p>
       <div className="mt-3 space-y-1 text-sm text-ink-2">
         <p>
-          <span className="font-semibold">Stay:</span> {item.accommodation}
+          <span className="font-semibold">Stay:</span> {item.accommodation_type}
         </p>
         <p>
           <span className="font-semibold">Price:</span> {item.price_per_person} per person
         </p>
-        {item.vibe_match && (
+        {item.why_it_fits && (
           <p>
-            <span className="font-semibold">Why it fits:</span> {item.vibe_match}
+            <span className="font-semibold">Why it fits:</span> {item.why_it_fits}
           </p>
         )}
       </div>
