@@ -43,6 +43,8 @@ export function ChatRoom({
   const [askingVenn, setAskingVenn] = useState(false);
   const [vennPanelOpen, setVennPanelOpen] = useState(false);
   const [vennInput, setVennInput] = useState("");
+  // IDs of text messages that were sent via the Venn panel (for distinct rendering)
+  const [vennQueryIds, setVennQueryIds] = useState(new Set<string>());
   const [error, setError] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const vennTextareaRef = useRef<HTMLTextAreaElement>(null);
@@ -221,11 +223,44 @@ export function ChatRoom({
     }
   }
 
-  function handleVennSubmit() {
+  async function handleVennSubmit() {
     const trimmed = vennInput.trim();
     if (!trimmed || askingVenn) return;
+
     setVennPanelOpen(false);
     setVennInput("");
+
+    // Post the query as a visible text message so the group sees what was asked
+    const supabase = createClient();
+    const { data } = await supabase
+      .from("messages")
+      .insert({
+        trip_id: tripId,
+        user_id: currentUserId,
+        content: trimmed,
+        message_type: "text",
+      })
+      .select("id, created_at")
+      .single();
+
+    if (data) {
+      setVennQueryIds((prev) => new Set([...prev, data.id]));
+      setMessages((prev) => {
+        if (prev.some((m) => m.id === data.id)) return prev;
+        return [
+          ...prev,
+          {
+            id: data.id,
+            trip_id: tripId,
+            user_id: currentUserId,
+            content: trimmed,
+            message_type: "text",
+            created_at: data.created_at,
+          },
+        ];
+      });
+    }
+
     void triggerVenn(trimmed);
   }
 
@@ -235,7 +270,7 @@ export function ChatRoom({
   }
 
   return (
-    <div className="flex-1 flex flex-col min-h-0 relative">
+    <div className="flex-1 flex flex-col min-h-0">
       <div className="border-b border-line bg-white">
         <div className="mx-auto max-w-3xl px-6 py-4">
           <h1 className="font-bold text-lg text-ink">{tripName}</h1>
@@ -247,7 +282,7 @@ export function ChatRoom({
       </div>
 
       <div className="flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-3xl px-6 pt-6 pb-20 space-y-4">
+        <div className="mx-auto max-w-3xl px-6 py-6 space-y-4">
           {messages.length === 0 && (
             <div className="py-12 text-center text-sm text-ink-3">
               No messages yet. Say hi, or tap the Venn button to get started.
@@ -258,6 +293,7 @@ export function ChatRoom({
               key={message.id}
               message={message}
               isOwn={message.user_id === currentUserId}
+              isVennQuery={vennQueryIds.has(message.id)}
             />
           ))}
           {askingVenn && (
@@ -270,109 +306,91 @@ export function ChatRoom({
         </div>
       </div>
 
-      {/* Backdrop: closes the Venn panel when clicking outside */}
+      {/* Full-screen backdrop — closes the Venn panel on outside click */}
       {vennPanelOpen && (
         <div
-          className="absolute inset-0 z-10"
+          className="fixed inset-0 z-10"
           onClick={() => setVennPanelOpen(false)}
         />
       )}
 
-      {/* Floating Venn button + slide-up panel */}
-      <div className="absolute bottom-24 right-6 z-20 flex flex-col items-end gap-3">
-        {/* Panel */}
-        <div
-          className={cn(
-            "w-80 rounded-2xl border border-black/[0.06] bg-white shadow-[0_8px_32px_rgba(0,0,0,0.14)] transition-all duration-200 ease-out origin-bottom-right",
-            vennPanelOpen
-              ? "opacity-100 translate-y-0 scale-100 pointer-events-auto"
-              : "opacity-0 translate-y-3 scale-[0.97] pointer-events-none"
-          )}
-        >
-          {/* Header */}
-          <div className="flex items-center justify-between border-b border-neutral-100 px-4 pb-3 pt-4">
-            <div className="flex items-center gap-2">
-              <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[#2563eb]">
-                <Sparkles className="h-3.5 w-3.5 text-white" />
+      {/* Input bar — sits above the backdrop so clicking it doesn't dismiss the panel */}
+      <div className="border-t border-line bg-white relative z-20">
+        <div className="mx-auto max-w-3xl px-6 py-4 relative">
+
+          {/* Venn panel — slides up from just above the input row */}
+          <div
+            className={cn(
+              "absolute bottom-[calc(100%+12px)] right-0 z-20 w-80 rounded-2xl border border-black/[0.06] bg-white shadow-[0_8px_32px_rgba(0,0,0,0.14)] transition-all duration-200 ease-out origin-bottom-right",
+              vennPanelOpen
+                ? "opacity-100 translate-y-0 scale-100 pointer-events-auto"
+                : "opacity-0 translate-y-3 scale-[0.97] pointer-events-none"
+            )}
+          >
+            {/* Panel header */}
+            <div className="flex items-center justify-between border-b border-neutral-100 px-4 pb-3 pt-4">
+              <div className="flex items-center gap-2">
+                <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[#2563eb]">
+                  <Sparkles className="h-3.5 w-3.5 text-white" />
+                </div>
+                <span className="font-semibold text-ink">Ask Venn</span>
               </div>
-              <span className="font-semibold text-ink">Ask Venn</span>
+              <button
+                type="button"
+                aria-label="Close"
+                onClick={() => setVennPanelOpen(false)}
+                className="rounded-md p-0.5 text-ink-3 transition-colors hover:text-ink"
+              >
+                <X className="h-4 w-4" />
+              </button>
             </div>
-            <button
-              type="button"
-              aria-label="Close"
-              onClick={() => setVennPanelOpen(false)}
-              className="rounded-md p-0.5 text-ink-3 transition-colors hover:text-ink"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
 
-          {/* Body */}
-          <div className="px-4 pb-2 pt-3">
-            <textarea
-              ref={vennTextareaRef}
-              value={vennInput}
-              onChange={(e) => setVennInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  handleVennSubmit();
-                }
-              }}
-              placeholder="What do you want to know?"
-              rows={3}
-              className="w-full resize-none rounded-xl border border-line px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-3 focus:border-brand focus:outline-none focus:ring-4 focus:ring-brand-light"
-            />
-            <div className="mt-2.5 flex flex-wrap gap-1.5">
-              {VENN_SUGGESTIONS.map((s) => (
-                <button
-                  key={s}
-                  type="button"
-                  onClick={() => fillChip(s)}
-                  className="rounded-full border border-line bg-white px-3 py-1 text-xs font-medium text-ink-2 transition-colors hover:border-brand/30 hover:bg-brand-light hover:text-brand"
-                >
-                  {s}
-                </button>
-              ))}
+            {/* Panel body */}
+            <div className="px-4 pb-2 pt-3">
+              <textarea
+                ref={vennTextareaRef}
+                value={vennInput}
+                onChange={(e) => setVennInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    void handleVennSubmit();
+                  }
+                }}
+                placeholder="What do you want to know?"
+                rows={3}
+                className="w-full resize-none rounded-xl border border-line px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-3 focus:border-brand focus:outline-none focus:ring-4 focus:ring-brand-light"
+              />
+              <div className="mt-2.5 flex flex-wrap gap-1.5">
+                {VENN_SUGGESTIONS.map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => fillChip(s)}
+                    className="rounded-full border border-line bg-white px-3 py-1 text-xs font-medium text-ink-2 transition-colors hover:border-brand/30 hover:bg-brand-light hover:text-brand"
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Panel footer */}
+            <div className="px-4 pb-4 pt-2">
+              <Button
+                type="button"
+                className="w-full"
+                onClick={() => void handleVennSubmit()}
+                disabled={!vennInput.trim() || askingVenn}
+              >
+                <Sparkles className="h-4 w-4" />
+                {askingVenn ? "Thinking..." : "Ask Venn"}
+              </Button>
             </div>
           </div>
 
-          {/* Footer */}
-          <div className="px-4 pb-4 pt-2">
-            <Button
-              type="button"
-              className="w-full"
-              onClick={handleVennSubmit}
-              disabled={!vennInput.trim() || askingVenn}
-            >
-              <Sparkles className="h-4 w-4" />
-              {askingVenn ? "Thinking..." : "Ask Venn"}
-            </Button>
-          </div>
-        </div>
-
-        {/* FAB */}
-        <button
-          type="button"
-          aria-label={vennPanelOpen ? "Close Venn" : "Ask Venn"}
-          onClick={() => setVennPanelOpen((o) => !o)}
-          className={cn(
-            "flex h-14 w-14 items-center justify-center rounded-full bg-[#2563eb] text-white shadow-lg transition-all duration-200 hover:bg-blue-600 active:scale-95",
-            askingVenn && "animate-pulse"
-          )}
-        >
-          {vennPanelOpen ? (
-            <X className="h-5 w-5" />
-          ) : (
-            <Sparkles className="h-5 w-5" />
-          )}
-        </button>
-      </div>
-
-      {/* Message input bar */}
-      <div className="border-t border-line bg-white">
-        <div className="mx-auto max-w-3xl px-6 py-4">
           {error && <p className="mb-2 text-sm text-red-600">{error}</p>}
+
           <form onSubmit={handleSubmit} className="flex gap-2">
             <input
               value={input}
@@ -380,6 +398,22 @@ export function ChatRoom({
               placeholder="Message your group..."
               className="flex-1 rounded-xl border border-line px-4 py-2.5 text-sm focus:border-brand focus:outline-none focus:ring-4 focus:ring-brand-light"
             />
+            {/* Venn button — inline in the input row */}
+            <button
+              type="button"
+              aria-label={vennPanelOpen ? "Close Venn" : "Ask Venn"}
+              onClick={() => setVennPanelOpen((o) => !o)}
+              className={cn(
+                "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#2563eb] text-white transition-all duration-150 hover:bg-blue-600 active:scale-95",
+                askingVenn && "opacity-60"
+              )}
+            >
+              {vennPanelOpen ? (
+                <X className="h-4 w-4" />
+              ) : (
+                <Sparkles className="h-4 w-4" />
+              )}
+            </button>
             <Button type="submit" disabled={sending || !input.trim()}>
               <Send className="h-4 w-4" />
             </Button>
@@ -390,7 +424,15 @@ export function ChatRoom({
   );
 }
 
-function ChatMessage({ message, isOwn }: { message: Message; isOwn: boolean }) {
+function ChatMessage({
+  message,
+  isOwn,
+  isVennQuery = false,
+}: {
+  message: Message;
+  isOwn: boolean;
+  isVennQuery?: boolean;
+}) {
   if (message.message_type === "venn_card" && message.recommendation) {
     const response = message.recommendation.recommendations_json;
 
@@ -414,8 +456,9 @@ function ChatMessage({ message, isOwn }: { message: Message; isOwn: boolean }) {
 
   return (
     <div className={cn("flex flex-col", isOwn ? "items-end" : "items-start")}>
-      <span className="px-1 mb-1 text-xs text-ink-3">
+      <span className="px-1 mb-1 inline-flex items-center gap-1 text-xs text-ink-3">
         {isOwn ? "You" : message.user?.name ?? "Someone"}
+        {isVennQuery && <Sparkles className="h-3 w-3 text-brand" />}
       </span>
       <div
         className={cn(
