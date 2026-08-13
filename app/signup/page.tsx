@@ -19,6 +19,15 @@ function SignupForm() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [checkEmail, setCheckEmail] = useState(false);
+  const [resending, setResending] = useState(false);
+  const [resendMessage, setResendMessage] = useState<string | null>(null);
+  const [resendError, setResendError] = useState<string | null>(null);
+
+  function buildEmailRedirectTo() {
+    return `${window.location.origin}/auth/confirm?next=${encodeURIComponent(
+      redirect || "/dashboard"
+    )}`;
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -26,16 +35,13 @@ function SignupForm() {
     setLoading(true);
 
     const supabase = createClient();
-    const emailRedirectTo = `${window.location.origin}/auth/confirm?next=${encodeURIComponent(
-      redirect || "/dashboard"
-    )}`;
 
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
         data: { name },
-        emailRedirectTo,
+        emailRedirectTo: buildEmailRedirectTo(),
       },
     });
 
@@ -54,16 +60,54 @@ function SignupForm() {
     }
   }
 
+  async function handleResend() {
+    setResending(true);
+    setResendMessage(null);
+    setResendError(null);
+
+    const supabase = createClient();
+    const { error } = await supabase.auth.resend({
+      type: "signup",
+      email,
+      options: { emailRedirectTo: buildEmailRedirectTo() },
+    });
+
+    setResending(false);
+
+    if (error) {
+      setResendError(error.message);
+    } else {
+      setResendMessage("Email resent — check your inbox.");
+    }
+  }
+
   if (checkEmail) {
     return (
-      <AuthCard title="Check your email" subtitle="">
-        <p className="text-sm text-ink-2 text-center leading-relaxed">
-          We&apos;ve sent a confirmation link to <strong>{email}</strong>. Click it to
-          activate your account, then come back here to log in.
-        </p>
-        <Button className="w-full mt-6" onClick={() => router.push("/login")}>
-          Go to login
-        </Button>
+      <AuthCard title="Check your inbox">
+        <div className="text-center">
+          <p className="text-sm text-ink-2 leading-relaxed">
+            We&apos;ve sent a verification email to{" "}
+            <strong className="font-semibold text-ink">{email}</strong>. Click the
+            link in the email to verify your account and get started.
+          </p>
+
+          <Button
+            type="button"
+            variant="secondary"
+            className="w-full mt-6"
+            onClick={handleResend}
+            disabled={resending}
+          >
+            {resending ? "Resending..." : "Resend email"}
+          </Button>
+
+          {resendMessage && <p className="mt-3 text-sm text-brand">{resendMessage}</p>}
+          {resendError && <p className="mt-3 text-sm text-red-600">{resendError}</p>}
+
+          <p className="mt-6 text-xs text-ink-3">
+            Can&apos;t find it? Check your spam folder.
+          </p>
+        </div>
       </AuthCard>
     );
   }
