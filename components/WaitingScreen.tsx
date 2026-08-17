@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { Check, Copy } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 
@@ -9,11 +10,13 @@ export function WaitingScreen({
   members,
   groupSize,
   inviteUrl,
+  editPreferencesHref,
 }: {
   tripName: string;
-  members: { name: string; submitted: boolean }[];
+  members: { name: string; submitted: boolean; isYou: boolean }[];
   groupSize: number;
   inviteUrl: string;
+  editPreferencesHref: string;
 }) {
   const submittedCount = members.filter((m) => m.submitted).length;
   const progress = groupSize > 0 ? Math.min(submittedCount / groupSize, 1) : 0;
@@ -85,17 +88,27 @@ export function WaitingScreen({
         {members.map((member, i) => (
           <div key={i} className="flex items-center justify-between px-5 py-3.5">
             <span className="font-medium text-ink">{member.name}</span>
-            {member.submitted ? (
-              <span className="flex items-center gap-1.5 text-sm font-semibold text-green-600">
-                <Check className="h-4 w-4" />
-                Done
-              </span>
-            ) : (
-              <span className="flex items-center gap-2 text-sm text-ink-3">
-                <span className="inline-block h-3.5 w-3.5 rounded-full border-2 border-line" />
-                Waiting
-              </span>
-            )}
+            <div className="flex items-center gap-3">
+              {member.isYou && member.submitted && (
+                <Link
+                  href={editPreferencesHref}
+                  className="text-sm font-semibold text-brand hover:underline"
+                >
+                  Edit preferences
+                </Link>
+              )}
+              {member.submitted ? (
+                <span className="flex items-center gap-1.5 text-sm font-semibold text-green-600">
+                  <Check className="h-4 w-4" />
+                  Done
+                </span>
+              ) : (
+                <span className="flex items-center gap-2 text-sm text-ink-3">
+                  <span className="inline-block h-3.5 w-3.5 rounded-full border-2 border-line" />
+                  Waiting
+                </span>
+              )}
+            </div>
           </div>
         ))}
       </div>

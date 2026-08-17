@@ -39,6 +39,7 @@ export interface Trip {
   group_size: number;
   invite_code: string;
   status: TripStatus;
+  recommendations_generated_at: string | null;
   created_at: string;
 }
 
@@ -62,6 +63,7 @@ export interface Preferences {
   deal_breakers: string | null;
   distance: Distance;
   created_at: string;
+  preferences_updated_at: string;
 }
 
 export interface VennRecommendationItem {

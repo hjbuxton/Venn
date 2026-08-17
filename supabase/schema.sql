@@ -28,6 +28,11 @@ create table if not exists public.trips (
   created_at timestamptz not null default now()
 );
 
+-- Set by a trigger on venn_recommendations, not the app, so it stays correct
+-- regardless of which member's Venn request generated the recommendations.
+alter table public.trips
+  add column if not exists recommendations_generated_at timestamptz;
+
 create table if not exists public.trip_members (
   id uuid primary key default gen_random_uuid(),
   trip_id uuid not null references public.trips (id) on delete cascade,
@@ -54,6 +59,10 @@ create table if not exists public.preferences (
   created_at timestamptz not null default now(),
   unique (trip_id, user_id)
 );
+
+-- Set by a trigger on every update, not the app, so edits can't backdate it.
+alter table public.preferences
+  add column if not exists preferences_updated_at timestamptz not null default now();
 
 create table if not exists public.venn_recommendations (
   id uuid primary key default gen_random_uuid(),
@@ -179,6 +188,56 @@ create trigger on_trip_member_change
   for each row execute procedure public.check_trip_ready();
 
 -- ----------------------------------------------------------------------------
+-- Preference edits: stamp preferences_updated_at server-side (never trusted
+-- from the client) so staleness checks below can't be backdated.
+-- ----------------------------------------------------------------------------
+
+create or replace function public.set_preferences_updated_at()
+returns trigger
+language plpgsql
+as $$
+begin
+  new.preferences_updated_at := now();
+  return new;
+end;
+$$;
+
+drop trigger if exists on_preferences_update on public.preferences;
+create trigger on_preferences_update
+  before update on public.preferences
+  for each row execute procedure public.set_preferences_updated_at();
+
+-- ----------------------------------------------------------------------------
+-- Recommendation staleness: stamp trips.recommendations_generated_at whenever
+-- Venn generates actual trip ideas (not info/clarification/cost replies,
+-- which aren't affected by preference changes). SECURITY DEFINER because any
+-- trip member can trigger Venn, but only the organiser can normally update
+-- trips directly.
+-- ----------------------------------------------------------------------------
+
+create or replace function public.set_recommendations_generated_at()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if new.recommendations_json ->> 'type' = 'recommendations' then
+    update public.trips
+    set recommendations_generated_at = new.created_at
+    where id = new.trip_id;
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists on_venn_recommendation_created on public.venn_recommendations;
+create trigger on_venn_recommendation_created
+  after insert on public.venn_recommendations
+  for each row execute procedure public.set_recommendations_generated_at();
+
+-- ----------------------------------------------------------------------------
 -- Join flow: look up a trip by invite code (preview before joining), and
 -- join a trip by invite code (adds the caller to trip_members).
 -- ----------------------------------------------------------------------------
@@ -262,6 +321,23 @@ set search_path = public
 stable
 as $$
   select p.budget_range, p.available_dates, p.trip_vibes, p.deal_breakers, p.distance
+  from public.preferences p
+  where p.trip_id = p_trip_id
+    and public.is_trip_member(p_trip_id);
+$$;
+
+-- Staleness check: returns ONLY the latest preferences_updated_at across the
+-- trip (no user_id, no content) so the chat page can detect "someone edited
+-- their preferences after recommendations were generated" without exposing
+-- who changed what.
+create or replace function public.get_trip_preferences_last_updated(p_trip_id uuid)
+returns timestamptz
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select max(p.preferences_updated_at)
   from public.preferences p
   where p.trip_id = p_trip_id
     and public.is_trip_member(p_trip_id);
@@ -357,5 +433,6 @@ alter publication supabase_realtime add table public.messages;
 grant execute on function public.get_trip_by_invite_code(text) to authenticated, anon;
 grant execute on function public.join_trip_by_invite_code(text) to authenticated;
 grant execute on function public.get_trip_preferences_for_ai(uuid) to authenticated;
+grant execute on function public.get_trip_preferences_last_updated(uuid) to authenticated;
 grant execute on function public.is_trip_member(uuid) to authenticated;
 grant execute on function public.shares_trip_with(uuid) to authenticated;

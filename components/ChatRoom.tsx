@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ExternalLink, Send, Sparkles, X } from "lucide-react";
+import Link from "next/link";
+import { ExternalLink, Send, Sparkles, TriangleAlert, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/utils";
@@ -31,11 +32,13 @@ export function ChatRoom({
   tripName,
   currentUserId,
   initialMessages,
+  recommendationsStale = false,
 }: {
   tripId: string;
   tripName: string;
   currentUserId: string;
   initialMessages: Message[];
+  recommendationsStale?: boolean;
 }) {
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [input, setInput] = useState("");
@@ -272,14 +275,31 @@ export function ChatRoom({
   return (
     <div className="flex-1 flex flex-col min-h-0">
       <div className="border-b border-line bg-white">
-        <div className="mx-auto max-w-3xl px-6 py-4">
-          <h1 className="font-bold text-lg text-ink">{tripName}</h1>
-          <p className="text-sm text-ink-3">
-            Everyone&apos;s in — chat below, or tap the Venn button to get ideas, answers, or
-            cost breakdowns.
-          </p>
+        <div className="mx-auto max-w-3xl px-6 py-4 flex items-center justify-between gap-4">
+          <div>
+            <h1 className="font-bold text-lg text-ink">{tripName}</h1>
+            <p className="text-sm text-ink-3">
+              Everyone&apos;s in — chat below, or tap the Venn button to get ideas, answers, or
+              cost breakdowns.
+            </p>
+          </div>
+          <Link
+            href={`/trip/${tripId}/preferences`}
+            className="shrink-0 text-sm font-semibold text-brand hover:underline"
+          >
+            Edit preferences
+          </Link>
         </div>
       </div>
+
+      {recommendationsStale && (
+        <div className="border-b border-amber-200 bg-amber-50">
+          <div className="mx-auto max-w-3xl px-6 py-2.5 flex items-center gap-2 text-sm text-amber-800">
+            <TriangleAlert className="h-4 w-4 shrink-0" />
+            Preferences changed — recommendations may be out of date, ask @Venn to refresh.
+          </div>
+        </div>
+      )}
 
       <div className="flex-1 overflow-y-auto">
         <div className="mx-auto max-w-3xl px-6 py-6 space-y-4">

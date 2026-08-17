@@ -56,6 +56,17 @@ export default async function ChatPage({
     .eq("id", authUser.id)
     .single();
 
+  const { data: lastPreferencesUpdate } = await supabase.rpc(
+    "get_trip_preferences_last_updated",
+    { p_trip_id: id }
+  );
+
+  const recommendationsStale = Boolean(
+    trip.recommendations_generated_at &&
+      lastPreferencesUpdate &&
+      new Date(lastPreferencesUpdate as string) > new Date(trip.recommendations_generated_at)
+  );
+
   const { data: messages } = await supabase
     .from("messages")
     .select(
@@ -92,6 +103,7 @@ export default async function ChatPage({
         tripName={trip.name}
         currentUserId={authUser.id}
         initialMessages={initialMessages}
+        recommendationsStale={recommendationsStale}
       />
     </div>
   );

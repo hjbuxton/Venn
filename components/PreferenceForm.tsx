@@ -15,6 +15,7 @@ import {
   type BudgetRange,
   type DateRange,
   type Distance,
+  type Preferences,
   type TripVibe,
 } from "@/types/database";
 
@@ -26,17 +27,27 @@ const VIBE_OPTIONS = (Object.keys(VIBE_LABELS) as TripVibe[]).map((value) => ({
 export function PreferenceForm({
   tripId,
   travelWindow,
+  initialPreferences,
+  redirectTo,
+  submitLabel = "Submit my preferences",
 }: {
   tripId: string;
   travelWindow: DateRange | null;
+  initialPreferences?: Preferences | null;
+  redirectTo?: string;
+  submitLabel?: string;
 }) {
   const router = useRouter();
 
-  const [budgetRange, setBudgetRange] = useState<BudgetRange>("300_500");
-  const [availableDates, setAvailableDates] = useState<DateRange | null>(travelWindow);
-  const [tripVibes, setTripVibes] = useState<string[]>([]);
-  const [dealBreakers, setDealBreakers] = useState("");
-  const [distance, setDistance] = useState<Distance>("europe");
+  const [budgetRange, setBudgetRange] = useState<BudgetRange>(
+    initialPreferences?.budget_range ?? "300_500"
+  );
+  const [availableDates, setAvailableDates] = useState<DateRange | null>(
+    initialPreferences?.available_dates ?? travelWindow
+  );
+  const [tripVibes, setTripVibes] = useState<string[]>(initialPreferences?.trip_vibes ?? []);
+  const [dealBreakers, setDealBreakers] = useState(initialPreferences?.deal_breakers ?? "");
+  const [distance, setDistance] = useState<Distance>(initialPreferences?.distance ?? "europe");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -97,7 +108,11 @@ export function PreferenceForm({
       return;
     }
 
-    router.refresh();
+    if (redirectTo) {
+      router.push(redirectTo);
+    } else {
+      router.refresh();
+    }
   }
 
   return (
@@ -154,7 +169,7 @@ export function PreferenceForm({
       {error && <p className="text-sm text-red-600">{error}</p>}
 
       <Button type="submit" size="lg" className="w-full" disabled={loading}>
-        {loading ? "Submitting..." : "Submit my preferences"}
+        {loading ? "Saving..." : submitLabel}
       </Button>
     </form>
   );

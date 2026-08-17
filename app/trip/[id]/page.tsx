@@ -92,6 +92,7 @@ export default async function TripPage({
         ? "You"
         : member.users?.name ?? "Someone",
     submitted: member.preferences_submitted,
+    isYou: member.user_id === authUser.id,
   }));
 
   return (
@@ -103,6 +104,7 @@ export default async function TripPage({
           members={memberList}
           groupSize={trip.group_size}
           inviteUrl={inviteUrl}
+          editPreferencesHref={`/trip/${trip.id}/preferences`}
         />
       </main>
     </div>
