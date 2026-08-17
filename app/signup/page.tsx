@@ -18,6 +18,7 @@ function SignupForm() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [emailTaken, setEmailTaken] = useState(false);
   const [checkEmail, setCheckEmail] = useState(false);
   const [resending, setResending] = useState(false);
   const [resendMessage, setResendMessage] = useState<string | null>(null);
@@ -32,6 +33,7 @@ function SignupForm() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    setEmailTaken(false);
     setLoading(true);
 
     const supabase = createClient();
@@ -49,6 +51,11 @@ function SignupForm() {
 
     if (error) {
       setError(error.message);
+      return;
+    }
+
+    if (data.user && data.user.identities && data.user.identities.length === 0) {
+      setEmailTaken(true);
       return;
     }
 
@@ -164,6 +171,17 @@ function SignupForm() {
           />
         </div>
         {error && <p className="text-sm text-red-600">{error}</p>}
+        {emailTaken && (
+          <p className="text-sm text-red-600">
+            That email is already registered.{" "}
+            <Link
+              href={redirect ? `/login?redirect=${encodeURIComponent(redirect)}` : "/login"}
+              className="font-semibold underline"
+            >
+              Try logging in instead.
+            </Link>
+          </p>
+        )}
         <Button type="submit" className="w-full" size="lg" disabled={loading}>
           {loading ? "Creating account..." : "Sign up"}
         </Button>
