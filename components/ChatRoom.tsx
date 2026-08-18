@@ -1,10 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import Link from "next/link";
 import { ExternalLink, Send, Sparkles, TriangleAlert, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import { Button } from "@/components/ui/Button";
+import { Button, LinkButton } from "@/components/ui/Button";
 import { cn } from "@/lib/utils";
 import type {
   Message,
@@ -32,7 +31,7 @@ export function ChatRoom({
   tripName,
   currentUserId,
   initialMessages,
-  recommendationsStale = false,
+  recommendationsStale: initialRecommendationsStale = false,
 }: {
   tripId: string;
   tripName: string;
@@ -44,6 +43,7 @@ export function ChatRoom({
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [askingVenn, setAskingVenn] = useState(false);
+  const [recommendationsStale, setRecommendationsStale] = useState(initialRecommendationsStale);
   const [vennPanelOpen, setVennPanelOpen] = useState(false);
   const [vennInput, setVennInput] = useState("");
   // IDs of text messages that were sent via the Venn panel (for distinct rendering)
@@ -137,6 +137,9 @@ export function ChatRoom({
 
             if (message.message_type === "venn_card") {
               setAskingVenn(false);
+              if (message.recommendation?.recommendations_json.type === "recommendations") {
+                setRecommendationsStale(false);
+              }
             }
           }
         )
@@ -283,20 +286,34 @@ export function ChatRoom({
               cost breakdowns.
             </p>
           </div>
-          <Link
+          <LinkButton
             href={`/trip/${tripId}/preferences`}
-            className="shrink-0 text-sm font-semibold text-brand hover:underline"
+            variant="secondary"
+            size="sm"
+            className="shrink-0"
           >
             Edit preferences
-          </Link>
+          </LinkButton>
         </div>
       </div>
 
       {recommendationsStale && (
         <div className="border-b border-amber-200 bg-amber-50">
-          <div className="mx-auto max-w-3xl px-6 py-2.5 flex items-center gap-2 text-sm text-amber-800">
-            <TriangleAlert className="h-4 w-4 shrink-0" />
-            Preferences changed — recommendations may be out of date, ask @Venn to refresh.
+          <div className="mx-auto max-w-3xl px-6 py-2.5 flex items-center justify-between gap-4 flex-wrap">
+            <div className="flex items-center gap-2 text-sm text-amber-800">
+              <TriangleAlert className="h-4 w-4 shrink-0" />
+              Preferences have been updated — recommendations may be out of date.
+            </div>
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              className="shrink-0"
+              onClick={() => void triggerVenn("@Venn refresh")}
+              disabled={askingVenn}
+            >
+              {askingVenn ? "Refreshing..." : "Refresh recommendations"}
+            </Button>
           </div>
         </div>
       )}
