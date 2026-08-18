@@ -21,7 +21,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={`${plusJakartaSans.variable} h-full antialiased`}>
-      <body className="min-h-full flex flex-col bg-surface text-ink font-sans">
+      <body className="h-full flex flex-col bg-surface text-ink font-sans">
         {children}
       </body>
     </html>
