@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ExternalLink, Send, Sparkles, TriangleAlert, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { Button, LinkButton } from "@/components/ui/Button";
@@ -20,7 +20,7 @@ interface RealtimeMessageRow {
   message_type: Message["message_type"];
   created_at: string;
   users: { name: string } | null;
-  venn_recommendations: Pick<VennRecommendation, "id" | "recommendations_json"> | null;
+  venn_recommendations: Pick<VennRecommendation, "id" | "recommendations_json" | "triggered_by"> | null;
 }
 
 const VENN_MENTION = /@venn/i;
@@ -51,6 +51,21 @@ export function ChatRoom({
   const [error, setError] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const vennTextareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // If the most recent Venn card is a clarifying question, the person who
+  // triggered it is expected to reply next. Derived from message history
+  // (rather than a separate flag) so it self-resolves the moment a newer
+  // venn_card appears, and survives reloads / multiple tabs.
+  const pendingClarificationFor = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const message = messages[i];
+      if (message.message_type === "venn_card" && message.recommendation) {
+        const response = message.recommendation.recommendations_json;
+        return response.type === "clarification" ? message.recommendation.triggered_by : null;
+      }
+    }
+    return null;
+  }, [messages]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -100,7 +115,7 @@ export function ChatRoom({
             const { data } = await supabase
               .from("messages")
               .select(
-                "id, trip_id, user_id, content, message_type, recommendation_id, created_at, users(name), venn_recommendations(id, recommendations_json)"
+                "id, trip_id, user_id, content, message_type, recommendation_id, created_at, users(name), venn_recommendations(id, recommendations_json, triggered_by)"
               )
               .eq("id", newRow.id)
               .single();
@@ -123,7 +138,7 @@ export function ChatRoom({
                 ? {
                     id: row.venn_recommendations.id,
                     trip_id: row.trip_id,
-                    triggered_by: "",
+                    triggered_by: row.venn_recommendations.triggered_by,
                     recommendations_json: row.venn_recommendations.recommendations_json,
                     created_at: row.created_at,
                   }
@@ -204,7 +219,7 @@ export function ChatRoom({
     if (!trimmed) return;
     setInput("");
 
-    if (VENN_MENTION.test(trimmed)) {
+    if (VENN_MENTION.test(trimmed) || pendingClarificationFor === currentUserId) {
       void askVenn(trimmed);
       return;
     }

@@ -6,7 +6,7 @@ import type { Message, Trip, VennRecommendation } from "@/types/database";
 
 interface MessageRow extends Message {
   users: { name: string } | null;
-  venn_recommendations: Pick<VennRecommendation, "id" | "recommendations_json"> | null;
+  venn_recommendations: Pick<VennRecommendation, "id" | "recommendations_json" | "triggered_by"> | null;
 }
 
 export default async function ChatPage({
@@ -70,7 +70,7 @@ export default async function ChatPage({
   const { data: messages } = await supabase
     .from("messages")
     .select(
-      "id, trip_id, user_id, content, message_type, recommendation_id, created_at, users(name), venn_recommendations(id, recommendations_json)"
+      "id, trip_id, user_id, content, message_type, recommendation_id, created_at, users(name), venn_recommendations(id, recommendations_json, triggered_by)"
     )
     .eq("trip_id", id)
     .order("created_at", { ascending: true })
@@ -88,7 +88,7 @@ export default async function ChatPage({
       ? {
           id: m.venn_recommendations.id,
           trip_id: m.trip_id,
-          triggered_by: "",
+          triggered_by: m.venn_recommendations.triggered_by,
           recommendations_json: m.venn_recommendations.recommendations_json,
           created_at: m.created_at,
         }
