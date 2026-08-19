@@ -205,7 +205,7 @@ export function ChatRoom({
     setInput("");
 
     if (VENN_MENTION.test(trimmed)) {
-      void triggerVenn(trimmed);
+      void askVenn(trimmed);
       return;
     }
 
@@ -229,14 +229,15 @@ export function ChatRoom({
     }
   }
 
-  async function handleVennSubmit() {
-    const trimmed = vennInput.trim();
+  // Shared @Venn entry point: post the query as a normal visible message so
+  // the group sees what was asked (and it stays in the chat afterwards),
+  // then trigger Venn. Used by direct "@Venn ..." typing, the Ask Venn
+  // panel, and the stale-recommendations refresh button, so all three
+  // behave identically.
+  async function askVenn(content: string) {
+    const trimmed = content.trim();
     if (!trimmed || askingVenn) return;
 
-    setVennPanelOpen(false);
-    setVennInput("");
-
-    // Post the query as a visible text message so the group sees what was asked
     const supabase = createClient();
     const { data } = await supabase
       .from("messages")
@@ -268,6 +269,16 @@ export function ChatRoom({
     }
 
     void triggerVenn(trimmed);
+  }
+
+  async function handleVennSubmit() {
+    const trimmed = vennInput.trim();
+    if (!trimmed || askingVenn) return;
+
+    setVennPanelOpen(false);
+    setVennInput("");
+
+    void askVenn(trimmed);
   }
 
   function fillChip(text: string) {
@@ -309,7 +320,7 @@ export function ChatRoom({
               size="sm"
               variant="secondary"
               className="shrink-0"
-              onClick={() => void triggerVenn("@Venn refresh")}
+              onClick={() => void askVenn("@Venn refresh")}
               disabled={askingVenn}
             >
               {askingVenn ? "Refreshing..." : "Refresh recommendations"}
@@ -432,7 +443,7 @@ export function ChatRoom({
             <input
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="Message your group..."
+              placeholder="Message your group or ask @Venn for help"
               className="flex-1 rounded-xl border border-line px-4 py-2.5 text-sm focus:border-brand focus:outline-none focus:ring-4 focus:ring-brand-light"
             />
             {/* Venn button — inline in the input row */}
@@ -511,9 +522,9 @@ function ChatMessage({
 
 function VennCardShell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="rounded-2xl border border-brand/20 bg-brand-light/50 p-5">
-      <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-brand">
-        <Sparkles className="h-4 w-4" />
+    <div className="rounded-2xl border border-brand/20 bg-brand-light/50 p-4">
+      <div className="mb-2 flex items-center gap-2 text-xs font-semibold text-brand">
+        <Sparkles className="h-3.5 w-3.5" />
         Venn
       </div>
       {children}
@@ -528,10 +539,10 @@ function RecommendationsCard({
 }) {
   return (
     <VennCardShell>
-      <p className="mb-3 text-sm text-ink-2">
+      <p className="mb-2 text-sm text-ink-2">
         {response.message ?? "Here are some ideas for your group."}
       </p>
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid gap-2.5 sm:grid-cols-2">
         {response.trips.map((item, i) => (
           <RecommendationCard key={i} item={item} />
         ))}
@@ -597,16 +608,16 @@ function CalculationCard({
 
 function RecommendationCard({ item }: { item: VennRecommendationItem }) {
   return (
-    <div className="flex flex-col rounded-xl border border-line bg-white p-4">
-      <h3 className="font-bold text-ink">
+    <div className="flex flex-col rounded-lg border border-line bg-white p-3">
+      <h3 className="font-bold text-sm text-ink">
         {item.destination}
         {item.country ? `, ${item.country}` : ""}
       </h3>
-      <p className="mt-1 text-sm text-ink-3">
+      <p className="mt-0.5 text-xs text-ink-3">
         {item.dates}
         {item.nights ? ` · ${item.nights} night${item.nights === 1 ? "" : "s"}` : ""}
       </p>
-      <div className="mt-3 space-y-1 text-sm text-ink-2">
+      <div className="mt-2 space-y-0.5 text-xs text-ink-2">
         <p>
           <span className="font-semibold">Stay:</span> {item.accommodation_type}
         </p>
@@ -623,10 +634,10 @@ function RecommendationCard({ item }: { item: VennRecommendationItem }) {
         href={item.booking_url}
         target="_blank"
         rel="noopener noreferrer"
-        className="mt-4 inline-flex h-9 w-full items-center justify-center gap-2 rounded-lg border border-line bg-white px-3.5 text-sm font-semibold text-ink transition-colors duration-150 hover:bg-surface"
+        className="mt-2.5 inline-flex h-8 w-full items-center justify-center gap-1.5 rounded-md border border-line bg-white px-3 text-xs font-semibold text-ink transition-colors duration-150 hover:bg-surface"
       >
         View on Booking.com
-        <ExternalLink className="h-3.5 w-3.5" />
+        <ExternalLink className="h-3 w-3" />
       </a>
     </div>
   );
