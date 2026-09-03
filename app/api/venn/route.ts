@@ -32,9 +32,12 @@ interface HistoryRow {
 const SYSTEM_PROMPT = `You are Venn, an AI travel planning assistant embedded in a group chat for friends planning a trip together.
 
 You have access to:
-- An anonymised summary of everyone's private preferences (budget, available dates, trip vibes, distance willing to travel, and any deal breakers). This data is strictly confidential: never reveal, reference, or imply any individual's specific preference to the group, never name a group member in connection with any preference, and never speculate about who holds which preference.
+- An anonymised summary of preferences submitted so far (budget, available dates, trip vibes, distance willing to travel, and any deal breakers) - this may be just one person's if the group hasn't fully joined yet, or empty if nobody has submitted. This data is strictly confidential: never reveal, reference, or imply any individual's specific preference to the group, never name a group member in connection with any preference, and never speculate about who holds which preference.
+- Whether the group is "ready" - enough members have submitted preferences to generate full, tailored recommendations. If not ready, you'll be told how many have answered so far.
 - The last messages in the group chat, for context.
 - The message that just triggered you (it will mention @Venn).
+
+If the group is NOT ready yet: never use the "recommendations" type, even if asked directly for trip ideas or a full recommendation. Instead use "chat" - briefly explain that you need more people's preferences before putting together tailored recommendations, and offer to discuss general ideas, rough destination thoughts, or answer questions in the meantime. Information, clarification, and calculation responses are all still fine as normal - only the formal "recommendations" cards are gated on the group being ready.
 
 Preferences will often differ across the group - some may want it warmer, others cooler; some higher budget, others lower. This is normal and NOT something to surface. Never describe the group as having a "conflict," "disagreement," or "split," and never ask the group to discuss or resolve differing preferences themselves - finding the compromise is your job, done silently, not something to hand back to them. Concretely:
 - If a single destination reasonably satisfies the range of preferences, recommend it with general reasoning about the destination itself (climate, cost, activities, etc.) - never reasoning framed as "your group wants X and Y" or otherwise tied back to what anyone asked for.
@@ -87,7 +90,13 @@ Return exactly 5 trips for a fresh request, or fewer if filtering down a previou
   "total": "Optional total, e.g. '£450 per person'"
 }
 
-Always return valid JSON only, matching exactly one of these four shapes.`;
+5. Chat - general conversation: casual questions, small talk, explaining how the app works, discussing rough ideas or destination thoughts without committing to specific tailored recommendations, or (see above) explaining that the group isn't ready for full recommendations yet:
+{
+  "type": "chat",
+  "message": "A short, conversational reply"
+}
+
+Always return valid JSON only, matching exactly one of these five shapes.`;
 
 function summarizeVennResponse(response: VennResponse): string {
   switch (response.type) {
@@ -101,6 +110,8 @@ function summarizeVennResponse(response: VennResponse): string {
       return response.message;
     case "calculation":
       return response.headline ?? "Cost breakdown shared.";
+    case "chat":
+      return response.message;
   }
 }
 
@@ -136,40 +147,47 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Trip not found." }, { status: 404 });
   }
 
+  const { data: trip } = await supabase
+    .from("trips")
+    .select("status, group_size")
+    .eq("id", tripId)
+    .single();
+
+  const groupReady = trip?.status !== "collecting";
+
   const { data: preferencesData, error: prefsError } = await supabase.rpc(
     "get_trip_preferences_for_ai",
     { p_trip_id: tripId }
   );
 
-  const preferences = preferencesData as PreferenceRow[] | null;
+  const preferences = (preferencesData as PreferenceRow[] | null) ?? [];
 
   if (prefsError) {
     return NextResponse.json({ error: prefsError.message }, { status: 400 });
   }
 
-  if (!preferences || preferences.length === 0) {
-    return NextResponse.json(
-      { error: "No preferences submitted yet for this trip." },
-      { status: 400 }
-    );
-  }
+  const preferencesSummary = preferences.length
+    ? preferences
+        .map((pref, i) => {
+          const vibes = pref.trip_vibes.map((v) => VIBE_LABELS[v] ?? v).join(", ");
+          const lines = [
+            `Person ${i + 1}:`,
+            `- Budget per person: ${BUDGET_LABELS[pref.budget_range] ?? pref.budget_range}`,
+            `- Available dates: ${pref.available_dates.from} to ${pref.available_dates.to}`,
+            `- Trip vibe: ${vibes || "no preference"}`,
+            `- Willing to travel: ${DISTANCE_LABELS[pref.distance] ?? pref.distance}`,
+          ];
+          if (pref.deal_breakers) {
+            lines.push(`- Deal breakers: ${pref.deal_breakers}`);
+          }
+          return lines.join("\n");
+        })
+        .join("\n\n")
+    : "(nobody has submitted preferences yet)";
 
-  const preferencesSummary = preferences
-    .map((pref, i) => {
-      const vibes = pref.trip_vibes.map((v) => VIBE_LABELS[v] ?? v).join(", ");
-      const lines = [
-        `Person ${i + 1}:`,
-        `- Budget per person: ${BUDGET_LABELS[pref.budget_range] ?? pref.budget_range}`,
-        `- Available dates: ${pref.available_dates.from} to ${pref.available_dates.to}`,
-        `- Trip vibe: ${vibes || "no preference"}`,
-        `- Willing to travel: ${DISTANCE_LABELS[pref.distance] ?? pref.distance}`,
-      ];
-      if (pref.deal_breakers) {
-        lines.push(`- Deal breakers: ${pref.deal_breakers}`);
-      }
-      return lines.join("\n");
-    })
-    .join("\n\n");
+  const groupReadySummary = groupReady
+    ? "Group ready: yes - full recommendations are available."
+    : `Group ready: no - only ${preferences.length} of ${trip?.group_size ?? "?"} people have submitted preferences so far. Do not generate formal "recommendations" cards; use "chat" instead if asked for trip ideas.`;
 
   const { data: historyData } = await supabase
     .from("messages")
@@ -194,7 +212,9 @@ export async function POST(request: Request) {
         .join("\n")
     : "(no previous messages)";
 
-  const userPrompt = `Group's anonymised preferences:
+  const userPrompt = `${groupReadySummary}
+
+Group's anonymised preferences:
 
 ${preferencesSummary}
 
@@ -223,10 +243,25 @@ Triggering message: ${message.trim()}`;
       throw new Error("Venn's response didn't contain valid JSON.");
     }
 
-    const parsed = JSON.parse(jsonMatch[0]) as VennResponse;
+    let parsed = JSON.parse(jsonMatch[0]) as VennResponse;
 
-    if (!["recommendations", "information", "clarification", "calculation"].includes(parsed.type)) {
+    if (
+      !["recommendations", "information", "clarification", "calculation", "chat"].includes(
+        parsed.type
+      )
+    ) {
       throw new Error("Venn's response had an unrecognised type.");
+    }
+
+    // Enforced here, not just prompted for: full recommendation cards are
+    // never generated before the group is ready, regardless of what the
+    // model returns.
+    if (!groupReady && parsed.type === "recommendations") {
+      parsed = {
+        type: "chat",
+        message:
+          "I need a few more people's preferences before I can put together full recommendations — but happy to talk through general ideas in the meantime!",
+      };
     }
 
     if (parsed.type === "recommendations") {

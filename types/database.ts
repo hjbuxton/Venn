@@ -104,6 +104,10 @@ export type VennResponse =
       headline?: string;
       breakdown: VennCostBreakdownItem[];
       total?: string;
+    }
+  | {
+      type: "chat";
+      message: string;
     };
 
 export interface VennRecommendation {

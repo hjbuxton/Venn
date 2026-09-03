@@ -1,12 +1,17 @@
+import { headers } from "next/headers";
 import { redirect, notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { AppHeader } from "@/components/AppHeader";
 import { ChatRoom } from "@/components/ChatRoom";
-import type { Message, Trip, VennRecommendation } from "@/types/database";
+import type { Message, Trip, TripMember, User, VennRecommendation } from "@/types/database";
 
 interface MessageRow extends Message {
   users: { name: string } | null;
   venn_recommendations: Pick<VennRecommendation, "id" | "recommendations_json" | "triggered_by"> | null;
+}
+
+interface MemberRow extends TripMember {
+  users: Pick<User, "name"> | null;
 }
 
 export default async function ChatPage({
@@ -46,7 +51,12 @@ export default async function ChatPage({
     redirect("/dashboard");
   }
 
-  if (trip.status === "collecting") {
+  const groupReady = trip.status !== "collecting";
+
+  // Only the organiser gets early access to chat while the group is still
+  // collecting (see app/trip/[id]/page.tsx) — anyone else who lands here
+  // directly goes back to the normal waiting screen.
+  if (!groupReady && trip.organiser_id !== authUser.id) {
     redirect(`/trip/${id}`);
   }
 
@@ -56,16 +66,38 @@ export default async function ChatPage({
     .eq("id", authUser.id)
     .single();
 
-  const { data: lastPreferencesUpdate } = await supabase.rpc(
-    "get_trip_preferences_last_updated",
-    { p_trip_id: id }
-  );
+  let recommendationsStale = false;
+  let waitingInfo: { submittedCount: number; groupSize: number; inviteUrl: string } | null = null;
 
-  const recommendationsStale = Boolean(
-    trip.recommendations_generated_at &&
-      lastPreferencesUpdate &&
-      new Date(lastPreferencesUpdate as string) > new Date(trip.recommendations_generated_at)
-  );
+  if (groupReady) {
+    const { data: lastPreferencesUpdate } = await supabase.rpc(
+      "get_trip_preferences_last_updated",
+      { p_trip_id: id }
+    );
+
+    recommendationsStale = Boolean(
+      trip.recommendations_generated_at &&
+        lastPreferencesUpdate &&
+        new Date(lastPreferencesUpdate as string) > new Date(trip.recommendations_generated_at)
+    );
+  } else {
+    const { data: members } = await supabase
+      .from("trip_members")
+      .select("id, trip_id, user_id, joined_at, preferences_submitted, users(name)")
+      .eq("trip_id", id)
+      .returns<MemberRow[]>();
+
+    const headersList = await headers();
+    const host = headersList.get("host");
+    const protocol =
+      host?.startsWith("localhost") || host?.startsWith("127.0.0.1") ? "http" : "https";
+
+    waitingInfo = {
+      submittedCount: (members ?? []).filter((m) => m.preferences_submitted).length,
+      groupSize: trip.group_size,
+      inviteUrl: `${protocol}://${host}/join/${trip.invite_code}`,
+    };
+  }
 
   const { data: messages } = await supabase
     .from("messages")
@@ -104,6 +136,8 @@ export default async function ChatPage({
         currentUserId={authUser.id}
         initialMessages={initialMessages}
         recommendationsStale={recommendationsStale}
+        groupReady={groupReady}
+        waitingInfo={waitingInfo}
       />
     </div>
   );

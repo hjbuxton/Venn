@@ -81,6 +81,13 @@ export default async function TripPage({
     );
   }
 
+  // The organiser doesn't have to sit on a static waiting screen — they can
+  // chat with Venn about general ideas while the rest of the group joins.
+  // Everyone else still waits here until the group is ready.
+  if (trip.organiser_id === authUser.id) {
+    redirect(`/trip/${id}/chat`);
+  }
+
   const headersList = await headers();
   const host = headersList.get("host");
   const protocol = host?.startsWith("localhost") || host?.startsWith("127.0.0.1") ? "http" : "https";

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ExternalLink, Send, Sparkles, TriangleAlert, X } from "lucide-react";
+import { Copy, ExternalLink, Send, Sparkles, TriangleAlert, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { Button, LinkButton } from "@/components/ui/Button";
 import { cn } from "@/lib/utils";
@@ -32,12 +32,16 @@ export function ChatRoom({
   currentUserId,
   initialMessages,
   recommendationsStale: initialRecommendationsStale = false,
+  groupReady = true,
+  waitingInfo = null,
 }: {
   tripId: string;
   tripName: string;
   currentUserId: string;
   initialMessages: Message[];
   recommendationsStale?: boolean;
+  groupReady?: boolean;
+  waitingInfo?: { submittedCount: number; groupSize: number; inviteUrl: string } | null;
 }) {
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [input, setInput] = useState("");
@@ -49,8 +53,16 @@ export function ChatRoom({
   // IDs of text messages that were sent via the Venn panel (for distinct rendering)
   const [vennQueryIds, setVennQueryIds] = useState(new Set<string>());
   const [error, setError] = useState<string | null>(null);
+  const [inviteCopied, setInviteCopied] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const vennTextareaRef = useRef<HTMLTextAreaElement>(null);
+
+  async function handleCopyInvite() {
+    if (!waitingInfo) return;
+    await navigator.clipboard.writeText(waitingInfo.inviteUrl);
+    setInviteCopied(true);
+    setTimeout(() => setInviteCopied(false), 2000);
+  }
 
   // If the most recent Venn card is a clarifying question, the person who
   // triggered it is expected to reply next. Derived from message history
@@ -308,8 +320,9 @@ export function ChatRoom({
           <div>
             <h1 className="font-bold text-base leading-snug text-ink">{tripName}</h1>
             <p className="text-xs leading-snug text-ink-3">
-              Everyone&apos;s in — chat below, or tap the Venn button to get ideas, answers, or
-              cost breakdowns.
+              {groupReady
+                ? "Everyone's in — chat below, or tap the Venn button to get ideas, answers, or cost breakdowns."
+                : "Waiting for the group — chat with Venn about general ideas in the meantime."}
             </p>
           </div>
           <LinkButton
@@ -322,6 +335,24 @@ export function ChatRoom({
           </LinkButton>
         </div>
       </div>
+
+      {!groupReady && waitingInfo && (
+        <div className="border-b border-line bg-brand-light/40">
+          <div className="mx-auto max-w-3xl px-6 py-3 flex items-center justify-between gap-4 flex-wrap">
+            <p className="text-sm text-ink-2">
+              <span className="font-semibold text-ink">
+                {waitingInfo.submittedCount} of {waitingInfo.groupSize}
+              </span>{" "}
+              people have shared their preferences. Full recommendations unlock once everyone has
+              answered.
+            </p>
+            <Button type="button" variant="secondary" size="sm" onClick={handleCopyInvite}>
+              <Copy className="h-3.5 w-3.5" />
+              {inviteCopied ? "Copied!" : "Copy invite link"}
+            </Button>
+          </div>
+        </div>
+      )}
 
       {recommendationsStale && (
         <div className="border-b border-amber-200 bg-amber-50">
@@ -508,6 +539,8 @@ function ChatMessage({
         return <ClarificationCard response={response} />;
       case "calculation":
         return <CalculationCard response={response} />;
+      case "chat":
+        return <ChatReplyCard response={response} />;
     }
   }
 
@@ -587,6 +620,18 @@ function ClarificationCard({
   response,
 }: {
   response: Extract<VennResponse, { type: "clarification" }>;
+}) {
+  return (
+    <VennCardShell>
+      <p className="text-sm text-ink-2">{response.message}</p>
+    </VennCardShell>
+  );
+}
+
+function ChatReplyCard({
+  response,
+}: {
+  response: Extract<VennResponse, { type: "chat" }>;
 }) {
   return (
     <VennCardShell>
