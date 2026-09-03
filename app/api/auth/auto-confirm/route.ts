@@ -30,6 +30,19 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true });
   } catch (err) {
     console.error("Auto-confirm error:", err);
-    return NextResponse.json({ error: "Could not auto-confirm." }, { status: 500 });
+    // Temporary diagnostic (booleans/lengths only, never the secret itself)
+    // to debug why this is failing in production — remove once resolved.
+    return NextResponse.json(
+      {
+        error: "Could not auto-confirm.",
+        debug: {
+          message: err instanceof Error ? err.message : String(err),
+          hasServiceRoleKey: Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY),
+          serviceRoleKeyLength: process.env.SUPABASE_SERVICE_ROLE_KEY?.length ?? 0,
+          hasSupabaseUrl: Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL),
+        },
+      },
+      { status: 500 }
+    );
   }
 }
