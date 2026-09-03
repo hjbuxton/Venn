@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { LinkButton } from "@/components/ui/Button";
 import { VennLogo, VennMark } from "@/components/VennMark";
 
@@ -40,10 +41,13 @@ export default function Home() {
       <header className="border-b border-line bg-white/80 backdrop-blur sticky top-0 z-10">
         <div className="mx-auto max-w-6xl px-6 py-4 flex items-center justify-between">
           <VennLogo />
-          <nav className="flex items-center gap-3">
-            <LinkButton href="/login" variant="ghost" size="sm">
+          <nav className="flex items-center gap-4">
+            <Link
+              href="/login"
+              className="text-sm text-ink-3 hover:text-ink-2 transition-colors"
+            >
               Log in
-            </LinkButton>
+            </Link>
             <LinkButton href="/signup" size="sm">
               Sign up free
             </LinkButton>
@@ -54,8 +58,8 @@ export default function Home() {
       <main className="flex-1">
         {/* Hero */}
         <section className="relative overflow-hidden">
-          <div className="mx-auto max-w-6xl px-6 pt-20 pb-24 sm:pt-28 sm:pb-32 grid lg:grid-cols-2 gap-16 items-center">
-            <div>
+          <div className="mx-auto max-w-6xl px-6 pt-20 pb-24 sm:pt-28 sm:pb-32 grid lg:grid-cols-2 gap-x-10 lg:gap-x-16 gap-y-8 lg:gap-y-6 items-center">
+            <div className="order-1 lg:col-start-1 lg:row-start-1">
               <span className="inline-flex items-center gap-2 rounded-full bg-brand-light text-brand text-xs font-semibold px-3 py-1.5 mb-6">
                 Group travel, without the group chat chaos
               </span>
@@ -63,26 +67,13 @@ export default function Home() {
                 Your group&apos;s personal travel agent.
                 <span className="text-brand"> Free.</span>
               </h1>
-              <p className="mt-6 text-lg text-ink-3 max-w-lg">
-                The hard part of a group trip was never finding somewhere to stay.
-                It was agreeing on it. Venn collects everyone&apos;s budget and
-                preferences privately, then finds the trip that works for all of you.
-              </p>
-              <div className="mt-10 flex flex-wrap items-center gap-4">
-                <LinkButton href="/signup" size="lg">
-                  Start a trip
-                </LinkButton>
-                <LinkButton href="/login" variant="secondary" size="lg">
-                  I have an invite link
-                </LinkButton>
-              </div>
             </div>
 
-            <div className="relative h-[360px] sm:h-[420px]">
+            <div className="order-2 lg:order-none lg:col-start-2 lg:row-start-1 lg:row-span-2 relative h-[200px] sm:h-[280px] lg:h-[420px]">
               <div className="absolute inset-0 flex items-center justify-center">
-                <div className="relative w-72 h-72 sm:w-80 sm:h-80">
-                  <div className="absolute left-0 top-1/2 -translate-y-1/2 w-52 h-52 sm:w-56 sm:h-56 rounded-full bg-brand/10 border border-brand/20" />
-                  <div className="absolute right-0 top-1/2 -translate-y-1/2 w-52 h-52 sm:w-56 sm:h-56 rounded-full bg-brand/20 border border-brand/30" />
+                <div className="relative w-48 h-48 sm:w-64 sm:h-64 lg:w-80 lg:h-80">
+                  <div className="absolute left-0 top-1/2 -translate-y-1/2 w-32 h-32 sm:w-44 sm:h-44 lg:w-56 lg:h-56 rounded-full bg-brand/10 border border-brand/20" />
+                  <div className="absolute right-0 top-1/2 -translate-y-1/2 w-32 h-32 sm:w-44 sm:h-44 lg:w-56 lg:h-56 rounded-full bg-brand/20 border border-brand/30" />
                   <div className="absolute inset-0 flex items-center justify-center">
                     <div className="bg-white rounded-2xl border border-line shadow-xl px-6 py-5 text-center max-w-[200px]">
                       <p className="text-xs font-semibold text-brand uppercase tracking-wide mb-1">
@@ -94,6 +85,25 @@ export default function Home() {
                   </div>
                 </div>
               </div>
+            </div>
+
+            <div className="order-3 lg:order-none lg:col-start-1 lg:row-start-2">
+              <p className="text-lg text-ink-3 max-w-lg">
+                The hard part of a group trip was never finding somewhere to stay.
+                It was agreeing on it. Venn collects everyone&apos;s budget and
+                preferences privately, then finds the trip that works for all of you.
+              </p>
+              <div className="mt-10 flex flex-wrap items-center gap-4">
+                <LinkButton href="/signup" size="lg">
+                  Try it free
+                </LinkButton>
+                <LinkButton href="/login" variant="secondary" size="lg">
+                  I have an invite link
+                </LinkButton>
+              </div>
+              <p className="mt-3 text-sm text-ink-3">
+                Free · Takes 2 minutes · No credit card needed
+              </p>
             </div>
           </div>
         </section>
