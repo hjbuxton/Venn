@@ -39,7 +39,7 @@ export default function Home() {
   return (
     <div className="flex flex-col flex-1">
       <header className="border-b border-line bg-white/80 backdrop-blur sticky top-0 z-10">
-        <div className="mx-auto max-w-6xl px-6 py-4 flex items-center justify-between">
+        <div className="mx-auto max-w-6xl px-6 py-3 sm:py-4 flex items-center justify-between">
           <VennLogo />
           <nav className="flex items-center gap-4">
             <Link
@@ -58,9 +58,9 @@ export default function Home() {
       <main className="flex-1">
         {/* Hero */}
         <section className="relative overflow-hidden">
-          <div className="mx-auto max-w-6xl px-6 pt-20 pb-24 sm:pt-28 sm:pb-32 grid lg:grid-cols-2 gap-x-10 lg:gap-x-16 gap-y-8 lg:gap-y-6 items-center">
+          <div className="mx-auto max-w-6xl px-6 pt-6 pb-16 sm:pt-28 sm:pb-32 grid lg:grid-cols-2 gap-x-10 lg:gap-x-16 gap-y-3 lg:gap-y-6 items-center">
             <div className="order-1 lg:col-start-1 lg:row-start-1">
-              <span className="inline-flex items-center gap-2 rounded-full bg-brand-light text-brand text-xs font-semibold px-3 py-1.5 mb-6">
+              <span className="inline-flex items-center gap-2 rounded-full bg-brand-light text-brand text-xs font-semibold px-3 py-1.5 mb-3 sm:mb-6">
                 Group travel, without the group chat chaos
               </span>
               <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-ink leading-[1.05]">
@@ -69,18 +69,18 @@ export default function Home() {
               </h1>
             </div>
 
-            <div className="order-2 lg:order-none lg:col-start-2 lg:row-start-1 lg:row-span-2 relative h-[200px] sm:h-[280px] lg:h-[420px]">
+            <div className="order-2 lg:order-none lg:col-start-2 lg:row-start-1 lg:row-span-2 relative h-[120px] sm:h-[280px] lg:h-[420px]">
               <div className="absolute inset-0 flex items-center justify-center">
-                <div className="relative w-48 h-48 sm:w-64 sm:h-64 lg:w-80 lg:h-80">
-                  <div className="absolute left-0 top-1/2 -translate-y-1/2 w-32 h-32 sm:w-44 sm:h-44 lg:w-56 lg:h-56 rounded-full bg-brand/10 border border-brand/20" />
-                  <div className="absolute right-0 top-1/2 -translate-y-1/2 w-32 h-32 sm:w-44 sm:h-44 lg:w-56 lg:h-56 rounded-full bg-brand/20 border border-brand/30" />
+                <div className="relative w-28 h-28 sm:w-64 sm:h-64 lg:w-80 lg:h-80">
+                  <div className="absolute left-0 top-1/2 -translate-y-1/2 w-20 h-20 sm:w-44 sm:h-44 lg:w-56 lg:h-56 rounded-full bg-brand/10 border border-brand/20" />
+                  <div className="absolute right-0 top-1/2 -translate-y-1/2 w-20 h-20 sm:w-44 sm:h-44 lg:w-56 lg:h-56 rounded-full bg-brand/20 border border-brand/30" />
                   <div className="absolute inset-0 flex items-center justify-center">
-                    <div className="bg-white rounded-2xl border border-line shadow-xl px-6 py-5 text-center max-w-[200px]">
-                      <p className="text-xs font-semibold text-brand uppercase tracking-wide mb-1">
+                    <div className="bg-white rounded-2xl border border-line shadow-xl px-4 py-3 sm:px-6 sm:py-5 text-center whitespace-nowrap">
+                      <p className="text-[10px] sm:text-xs font-semibold text-brand uppercase tracking-wide mb-1">
                         Venn found it
                       </p>
-                      <p className="text-base font-bold text-ink">Lisbon, Portugal</p>
-                      <p className="text-sm text-ink-3 mt-1">4 nights · £340pp</p>
+                      <p className="text-sm sm:text-base font-bold text-ink">Lisbon, Portugal</p>
+                      <p className="text-xs sm:text-sm text-ink-3 mt-1">4 nights · £340pp</p>
                     </div>
                   </div>
                 </div>
@@ -88,12 +88,12 @@ export default function Home() {
             </div>
 
             <div className="order-3 lg:order-none lg:col-start-1 lg:row-start-2">
-              <p className="text-lg text-ink-3 max-w-lg">
+              <p className="text-base sm:text-lg text-ink-3 max-w-lg">
                 The hard part of a group trip was never finding somewhere to stay.
                 It was agreeing on it. Venn collects everyone&apos;s budget and
                 preferences privately, then finds the trip that works for all of you.
               </p>
-              <div className="mt-10 flex flex-wrap items-center gap-4">
+              <div className="mt-4 sm:mt-10 flex flex-wrap items-center gap-4">
                 <LinkButton href="/signup" size="lg">
                   Try it free
                 </LinkButton>
@@ -102,7 +102,7 @@ export default function Home() {
                 </LinkButton>
               </div>
               <p className="mt-3 text-sm text-ink-3">
-                Free · Takes 2 minutes · No credit card needed
+                Free · Takes 2 minutes
               </p>
             </div>
           </div>
