@@ -6,6 +6,8 @@ const PUBLIC_PATHS = ["/", "/login", "/signup", "/auth"];
 function isPublicPath(pathname: string) {
   if (PUBLIC_PATHS.includes(pathname)) return true;
   if (pathname.startsWith("/auth")) return true;
+  // Called right after signup, before a session exists.
+  if (pathname.startsWith("/api/auth/auto-confirm")) return true;
   if (pathname.startsWith("/join")) return true;
   if (pathname.startsWith("/_next")) return true;
   return false;

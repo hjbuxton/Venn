@@ -47,14 +47,14 @@ function SignupForm() {
       },
     });
 
-    setLoading(false);
-
     if (error) {
+      setLoading(false);
       setError(error.message);
       return;
     }
 
     if (data.user && data.user.identities && data.user.identities.length === 0) {
+      setLoading(false);
       setEmailTaken(true);
       return;
     }
@@ -62,9 +62,38 @@ function SignupForm() {
     if (data.session) {
       router.push(redirect || "/dashboard");
       router.refresh();
-    } else {
-      setCheckEmail(true);
+      return;
     }
+
+    // No session yet — Supabase project settings require confirmation.
+    // If REQUIRE_EMAIL_VERIFICATION is off, skip that block: the
+    // confirmation email has already been sent above exactly as before,
+    // but we don't make the user click it before proceeding.
+    if (data.user) {
+      const autoConfirmed = await fetch("/api/auth/auto-confirm", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: data.user.id }),
+      })
+        .then((res) => res.ok)
+        .catch(() => false);
+
+      if (autoConfirmed) {
+        const { error: signInError } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+
+        if (!signInError) {
+          router.push(redirect || "/dashboard");
+          router.refresh();
+          return;
+        }
+      }
+    }
+
+    setLoading(false);
+    setCheckEmail(true);
   }
 
   async function handleResend() {
