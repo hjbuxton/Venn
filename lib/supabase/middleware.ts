@@ -8,6 +8,11 @@ function isPublicPath(pathname: string) {
   if (pathname.startsWith("/auth")) return true;
   // Called right after signup, before a session exists.
   if (pathname.startsWith("/api/auth/auto-confirm")) return true;
+  // Server-to-server: Vercel Cron and unauthenticated email-link clicks
+  // never carry a session. Both are protected by their own means instead
+  // (CRON_SECRET check; the unsubscribe token itself).
+  if (pathname.startsWith("/api/cron")) return true;
+  if (pathname.startsWith("/unsubscribe")) return true;
   if (pathname.startsWith("/join")) return true;
   if (pathname.startsWith("/_next")) return true;
   return false;

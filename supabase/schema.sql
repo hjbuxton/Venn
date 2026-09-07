@@ -33,6 +33,11 @@ create table if not exists public.trips (
 alter table public.trips
   add column if not exists recommendations_generated_at timestamptz;
 
+-- Set once by the notifications cron when the "invite people" nudge email
+-- goes out, so it never sends more than once per trip.
+alter table public.trips
+  add column if not exists organiser_nudge_sent_at timestamptz;
+
 create table if not exists public.trip_members (
   id uuid primary key default gen_random_uuid(),
   trip_id uuid not null references public.trips (id) on delete cascade,
@@ -41,6 +46,17 @@ create table if not exists public.trip_members (
   preferences_submitted boolean not null default false,
   unique (trip_id, user_id)
 );
+
+-- last_read_at: bumped by the client whenever this member opens the chat or
+-- a new message streams in while they're on the page (see ChatRoom.tsx) —
+-- a per-trip "read up to here" watermark, not live presence. Messages newer
+-- than this count as unread for the activity-digest cron.
+-- last_activity_email_sent_at: set by the cron after sending an activity
+-- digest, so re-sends respect the cooldown regardless of message volume.
+alter table public.trip_members
+  add column if not exists last_read_at timestamptz not null default now();
+alter table public.trip_members
+  add column if not exists last_activity_email_sent_at timestamptz;
 
 -- Private per-person preferences. RLS below ensures only the owner can ever
 -- read their own row. Aggregation for the AI happens via a SECURITY DEFINER
@@ -83,11 +99,29 @@ create table if not exists public.messages (
   created_at timestamptz not null default now()
 );
 
+-- One row per user, provisioned automatically on signup (trigger below).
+-- Deliberately its own table rather than columns on public.users: the
+-- unsubscribe_token must stay hidden from fellow trip members, who can
+-- otherwise already read each other's basic profile row via users_select.
+create table if not exists public.notification_settings (
+  user_id uuid primary key references public.users (id) on delete cascade,
+  email_notifications_enabled boolean not null default true,
+  unsubscribe_token uuid not null default gen_random_uuid(),
+  created_at timestamptz not null default now()
+);
+
+-- Backfill for users created before this table existed.
+insert into public.notification_settings (user_id)
+select id from public.users
+on conflict (user_id) do nothing;
+
 create index if not exists trip_members_trip_id_idx on public.trip_members (trip_id);
 create index if not exists trip_members_user_id_idx on public.trip_members (user_id);
 create index if not exists preferences_trip_id_idx on public.preferences (trip_id);
 create index if not exists messages_trip_id_idx on public.messages (trip_id, created_at);
 create index if not exists venn_recommendations_trip_id_idx on public.venn_recommendations (trip_id);
+create unique index if not exists notification_settings_token_idx
+  on public.notification_settings (unsubscribe_token);
 
 -- ----------------------------------------------------------------------------
 -- Helper functions (SECURITY DEFINER — bypass RLS internally, used to avoid
@@ -148,6 +182,29 @@ drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute procedure public.handle_new_user();
+
+-- Provision a notification_settings row for every new user (see the
+-- backfill above for users that predate this table). Fires on
+-- public.users rather than auth.users so it never races the row it
+-- references into existence.
+create or replace function public.handle_new_user_notification_settings()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  insert into public.notification_settings (user_id)
+  values (new.id)
+  on conflict (user_id) do nothing;
+  return new;
+end;
+$$;
+
+drop trigger if exists on_user_created_notification_settings on public.users;
+create trigger on_user_created_notification_settings
+  after insert on public.users
+  for each row execute procedure public.handle_new_user_notification_settings();
 
 -- ----------------------------------------------------------------------------
 -- Trip status: flip to 'ready' once everyone has submitted preferences.
@@ -344,6 +401,65 @@ as $$
 $$;
 
 -- ----------------------------------------------------------------------------
+-- Notifications: unsubscribe (public, no auth required — the token itself is
+-- the credential, since someone clicking an email link is never logged in),
+-- and the cron's "who needs an activity digest" query (service_role only;
+-- not granted to anon/authenticated — it aggregates other people's message
+-- activity, which is only safe for the trusted server-side cron to see).
+-- ----------------------------------------------------------------------------
+
+create or replace function public.unsubscribe_by_token(p_token uuid)
+returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  update public.notification_settings
+  set email_notifications_enabled = false
+  where unsubscribe_token = p_token;
+
+  return found;
+end;
+$$;
+
+create or replace function public.get_unread_activity_candidates(
+  p_unread_after interval default '3 hours',
+  p_cooldown interval default '6 hours'
+)
+returns table (
+  trip_id uuid,
+  user_id uuid,
+  trip_name text,
+  unread_count bigint
+)
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select
+    tm.trip_id,
+    tm.user_id,
+    t.name as trip_name,
+    count(m.id) as unread_count
+  from public.trip_members tm
+  join public.trips t on t.id = tm.trip_id
+  join public.notification_settings ns on ns.user_id = tm.user_id
+  join public.messages m
+    on m.trip_id = tm.trip_id
+    and m.created_at > tm.last_read_at
+    and m.user_id is distinct from tm.user_id
+  where ns.email_notifications_enabled = true
+    and (
+      tm.last_activity_email_sent_at is null
+      or tm.last_activity_email_sent_at < now() - p_cooldown
+    )
+  group by tm.trip_id, tm.user_id, t.name
+  having min(m.created_at) < now() - p_unread_after;
+$$;
+
+-- ----------------------------------------------------------------------------
 -- Row Level Security
 -- ----------------------------------------------------------------------------
 
@@ -353,6 +469,17 @@ alter table public.trip_members enable row level security;
 alter table public.preferences enable row level security;
 alter table public.messages enable row level security;
 alter table public.venn_recommendations enable row level security;
+alter table public.notification_settings enable row level security;
+
+-- notification_settings: strictly self — unlike users_select, this is never
+-- visible to fellow trip members, since it holds the unsubscribe_token.
+drop policy if exists "notification_settings_select_own" on public.notification_settings;
+create policy "notification_settings_select_own" on public.notification_settings
+  for select using (user_id = auth.uid());
+
+drop policy if exists "notification_settings_update_own" on public.notification_settings;
+create policy "notification_settings_update_own" on public.notification_settings
+  for update using (user_id = auth.uid()) with check (user_id = auth.uid());
 
 -- users: see your own profile, or profiles of people you share a trip with.
 drop policy if exists "users_select" on public.users;
@@ -436,3 +563,5 @@ grant execute on function public.get_trip_preferences_for_ai(uuid) to authentica
 grant execute on function public.get_trip_preferences_last_updated(uuid) to authenticated;
 grant execute on function public.is_trip_member(uuid) to authenticated;
 grant execute on function public.shares_trip_with(uuid) to authenticated;
+grant execute on function public.unsubscribe_by_token(uuid) to authenticated, anon;
+grant execute on function public.get_unread_activity_candidates(interval, interval) to service_role;

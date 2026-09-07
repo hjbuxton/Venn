@@ -40,6 +40,7 @@ export interface Trip {
   invite_code: string;
   status: TripStatus;
   recommendations_generated_at: string | null;
+  organiser_nudge_sent_at: string | null;
   created_at: string;
 }
 
@@ -49,6 +50,8 @@ export interface TripMember {
   user_id: string;
   joined_at: string;
   preferences_submitted: boolean;
+  last_read_at: string;
+  last_activity_email_sent_at: string | null;
   // joined via select from users table
   user?: User;
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Copy, ExternalLink, Send, Sparkles, TriangleAlert, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { Button, LinkButton } from "@/components/ui/Button";
@@ -63,6 +63,23 @@ export function ChatRoom({
     setInviteCopied(true);
     setTimeout(() => setInviteCopied(false), 2000);
   }
+
+  // Bumps this member's "read up to here" watermark — on mount (opening the
+  // chat) and again whenever a message streams in while they're on the page
+  // (below), so the activity-digest cron only emails people who are actually
+  // away, not someone with the tab open in a long-running session.
+  const markRead = useCallback(async () => {
+    const supabase = createClient();
+    await supabase
+      .from("trip_members")
+      .update({ last_read_at: new Date().toISOString() })
+      .eq("trip_id", tripId)
+      .eq("user_id", currentUserId);
+  }, [tripId, currentUserId]);
+
+  useEffect(() => {
+    void markRead();
+  }, [markRead]);
 
   // If the most recent Venn card is a clarifying question, the person who
   // triggered it is expected to reply next. Derived from message history
@@ -162,6 +179,8 @@ export function ChatRoom({
               return [...prev, message];
             });
 
+            void markRead();
+
             if (message.message_type === "venn_card") {
               setAskingVenn(false);
               if (message.recommendation?.recommendations_json.type === "recommendations") {
@@ -179,7 +198,7 @@ export function ChatRoom({
       cancelled = true;
       if (channel) supabase.removeChannel(channel);
     };
-  }, [tripId]);
+  }, [tripId, markRead]);
 
   async function sendMessage(content: string) {
     const trimmed = content.trim();
