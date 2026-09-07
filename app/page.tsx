@@ -1,6 +1,7 @@
-import Link from "next/link";
 import { LinkButton } from "@/components/ui/Button";
-import { VennLogo, VennMark } from "@/components/VennMark";
+import { VennMark } from "@/components/VennMark";
+import { MarketingHeader } from "@/components/MarketingHeader";
+import { MarketingFooter } from "@/components/MarketingFooter";
 
 const steps = [
   {
@@ -38,22 +39,7 @@ const faqs = [
 export default function Home() {
   return (
     <div className="flex flex-col flex-1">
-      <header className="border-b border-line bg-white/80 backdrop-blur sticky top-0 z-10">
-        <div className="mx-auto max-w-6xl px-6 py-3 sm:py-4 flex items-center justify-between">
-          <VennLogo />
-          <nav className="flex items-center gap-4">
-            <Link
-              href="/login"
-              className="text-sm text-ink-3 hover:text-ink-2 transition-colors"
-            >
-              Log in
-            </Link>
-            <LinkButton href="/signup" size="sm">
-              Sign up free
-            </LinkButton>
-          </nav>
-        </div>
-      </header>
+      <MarketingHeader />
 
       <main className="flex-1">
         {/* Hero */}
@@ -180,14 +166,7 @@ export default function Home() {
         </section>
       </main>
 
-      <footer className="border-t border-line bg-white">
-        <div className="mx-auto max-w-6xl px-6 py-8 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <VennLogo />
-          <p className="text-sm text-ink-3">
-            &copy; {new Date().getFullYear()} Venn. Group travel, sorted.
-          </p>
-        </div>
-      </footer>
+      <MarketingFooter />
     </div>
   );
 }

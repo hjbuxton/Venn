@@ -1,0 +1,32 @@
+import Link from "next/link";
+import { LinkButton } from "@/components/ui/Button";
+import { VennLogo } from "@/components/VennMark";
+
+export function MarketingHeader() {
+  return (
+    <header className="border-b border-line bg-white/80 backdrop-blur sticky top-0 z-10">
+      <div className="mx-auto max-w-6xl px-6 py-3 sm:py-4 flex items-center justify-between">
+        <Link href="/">
+          <VennLogo />
+        </Link>
+        <nav className="flex items-center gap-4">
+          <Link
+            href="/faq"
+            className="text-sm text-ink-3 hover:text-ink-2 transition-colors"
+          >
+            FAQ
+          </Link>
+          <Link
+            href="/login"
+            className="text-sm text-ink-3 hover:text-ink-2 transition-colors"
+          >
+            Log in
+          </Link>
+          <LinkButton href="/signup" size="sm">
+            Sign up free
+          </LinkButton>
+        </nav>
+      </div>
+    </header>
+  );
+}
