@@ -9,16 +9,16 @@ export function MarketingHeader() {
         <Link href="/">
           <VennLogo />
         </Link>
-        <nav className="flex items-center gap-4">
+        <nav className="flex items-center gap-6">
           <Link
             href="/faq"
-            className="text-sm font-medium text-ink-2 hover:text-ink transition-colors"
+            className="text-base font-medium text-ink-2 hover:text-ink transition-colors"
           >
             FAQ
           </Link>
           <Link
             href="/login"
-            className="text-sm font-medium text-ink-2 hover:text-ink transition-colors"
+            className="text-base font-medium text-ink-2 hover:text-ink transition-colors"
           >
             Log in
           </Link>
