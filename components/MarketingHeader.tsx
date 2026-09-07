@@ -12,13 +12,13 @@ export function MarketingHeader() {
         <nav className="flex items-center gap-4">
           <Link
             href="/faq"
-            className="text-sm text-ink-3 hover:text-ink-2 transition-colors"
+            className="text-sm font-medium text-ink-2 hover:text-ink transition-colors"
           >
             FAQ
           </Link>
           <Link
             href="/login"
-            className="text-sm text-ink-3 hover:text-ink-2 transition-colors"
+            className="text-sm font-medium text-ink-2 hover:text-ink transition-colors"
           >
             Log in
           </Link>
